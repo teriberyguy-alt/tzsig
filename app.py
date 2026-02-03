@@ -5,19 +5,30 @@ import re
 app = Flask(__name__)
 
 def get_tz():
-    url = "https://d2emu.com/tz"
-    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+    r = requests.get(
+        "https://d2emu.com/tz",
+        headers={"User-Agent": "Mozilla/5.0"},
+        timeout=10
+    )
     r.raise_for_status()
 
-    html = r.text.upper()
+    html = r.text
+
+    # DEBUG — TEMPORARY
+    print("---- HTML START ----")
+    print(html[:1500])
+    print("---- HTML END ----")
+
+    html = html.upper()
 
     cur = re.search(r'CURRENT TERROR ZONE.*?<B>(.*?)</B>', html, re.S)
     nxt = re.search(r'NEXT TERROR ZONE.*?<B>(.*?)</B>', html, re.S)
 
-    current_zone = cur.group(1).strip() if cur else "UNKNOWN"
-    next_zone = nxt.group(1).strip() if nxt else "UNKNOWN"
+    return (
+        cur.group(1).strip() if cur else "UNKNOWN",
+        nxt.group(1).strip() if nxt else "UNKNOWN"
+    )
 
-    return current_zone, next_zone
 
 @app.route("/")
 def index():
