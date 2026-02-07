@@ -9,13 +9,13 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def scrape_ladder_stats():
-    url = 'https://d2emu.com/ladder/218121324'
+    url = 'https://d2emu.com/ladder'  # Main ladder page
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
     }
     try:
         response = requests.get(url, headers=headers, timeout=15)
-        print(f"Status code: {response.status_code}")  # Debug to Render logs
+        print(f"Status code: {response.status_code}")  # Debug to logs
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -28,37 +28,28 @@ def scrape_ladder_stats():
             'battletag': 'N/A'
         }
 
-        # h1 = name and battletag
-        h1 = soup.find('h1')
-        if h1:
-            h1_text = h1.text.strip()
-            print(f"h1 text: {h1_text}")
-            if '(' in h1_text and ')' in h1_text:
-                name = h1_text.split(' (')[0].strip()
-                battletag = h1_text.split(' (')[1].replace(')', '').strip()
-                stats['battletag'] = battletag
-            else:
-                stats['battletag'] = h1_text
+        # Find the table
+        table = soup.find('table')
+        if not table:
+            print("No table found on page")
+            return stats
 
-        # h2 = mode and level (e.g. "Softcore - Level 94")
-        h2 = soup.find('h2')
-        if h2:
-            h2_text = h2.text.strip()
-            print(f"h2 text: {h2_text}")
-            if '-' in h2_text:
-                mode = h2_text.split(' - ')[0].strip()
-                level = h2_text.split(' - ')[1].strip().replace('Level', '').strip()
-                stats['level'] = level
-                stats['class'] = mode  # Softcore/Hardcore as "class" placeholder
+        rows = table.find_all('tr')
+        for row in rows:
+            cells = row.find_all('td')
+            if len(cells) >= 6:
+                # BattleTag or name in cell 1 or 2
+                name_cell = cells[1].text.strip() if len(cells) > 1 else ''
+                if "GuyT#11983" in name_cell or "Its_Guy" in name_cell:
+                    print(f"Found row for player: {name_cell}")
+                    stats['rank'] = cells[0].text.strip() if len(cells) > 0 else 'N/A'
+                    stats['level'] = cells[2].text.strip() if len(cells) > 2 else 'N/A'
+                    stats['class'] = cells[3].text.strip() if len(cells) > 3 else 'N/A'
+                    stats['exp'] = cells[4].text.strip() if len(cells) > 4 else 'N/A'
+                    stats['last_active'] = cells[5].text.strip() if len(cells) > 5 else 'N/A'
+                    stats['battletag'] = name_cell
+                    break
 
-        # Class (if explicitly listed)
-        if "Assassin" in h2_text or "Assassin" in soup.get_text():
-            stats['class'] = 'Assassin'
-
-        # If rank/exp/last active appear later, add here
-        # For now, they are not on the page
-
-        print(f"Final scraped stats: {stats}")
         return stats
     except Exception as e:
         print(f"Scrape error: {str(e)}")
