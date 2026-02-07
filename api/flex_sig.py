@@ -25,13 +25,13 @@ def scrape_ladder_stats():
             'class': 'N/A',
             'exp': 'N/A',
             'last_active': 'N/A',
-            'battletag': 'N/A'
+            'battletag': 'GuyT#11341'
         }
 
         # Find the table
         table = soup.find('table')
         if not table:
-            print("No table found")
+            print("No table found on ladder page")
             return stats
 
         rows = table.find_all('tr')
@@ -40,7 +40,7 @@ def scrape_ladder_stats():
             if len(cells) >= 6:
                 # Check name/battletag cell (usually cell 1 or 2)
                 name_cell = cells[1].text.strip() if len(cells) > 1 else ''
-                if "GuyT#11983" in name_cell or "Its_Guy" in name_cell:
+                if "GuyT#11341" in name_cell or "Its_Guy" in name_cell:
                     print(f"Found player row: {name_cell}")
                     stats['battletag'] = name_cell
                     stats['rank'] = cells[0].text.strip() if len(cells) > 0 else 'N/A'
@@ -51,12 +51,12 @@ def scrape_ladder_stats():
                     break
 
         if stats['rank'] == 'N/A':
-            print("Player not found in top ladder rows")
+            print("Player GuyT#11341 not found in top ladder rows")
 
         return stats
     except Exception as e:
         print(f"Scrape error: {str(e)}")
-        return {'rank': 'Error', 'level': 'Error', 'class': 'Error', 'exp': 'Error', 'last_active': str(e)[:30], 'battletag': 'Error'}
+        return {'rank': 'Error', 'level': 'Error', 'class': 'Error', 'exp': 'Error', 'last_active': str(e)[:30], 'battletag': 'GuyT#11341'}
 
 @app.route('/flex-sig.png')
 def flex_sig():
