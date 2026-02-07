@@ -5,3 +5,5 @@ beautifulsoup4
 lxml
 gunicorn
 uvicorn
+selenium
+webdriver-manager
