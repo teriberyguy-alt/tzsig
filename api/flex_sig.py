@@ -15,7 +15,7 @@ def scrape_ladder_stats():
     }
     try:
         response = requests.get(url, headers=headers, timeout=15)
-        print(f"Status code: {response.status_code}")  # Debug to logs
+        print(f"Status code: {response.status_code}")
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -31,24 +31,27 @@ def scrape_ladder_stats():
         # Find the table
         table = soup.find('table')
         if not table:
-            print("No table found on page")
+            print("No table found")
             return stats
 
         rows = table.find_all('tr')
         for row in rows:
             cells = row.find_all('td')
             if len(cells) >= 6:
-                # BattleTag or name in cell 1 or 2
+                # Check name/battletag cell (usually cell 1 or 2)
                 name_cell = cells[1].text.strip() if len(cells) > 1 else ''
                 if "GuyT#11983" in name_cell or "Its_Guy" in name_cell:
-                    print(f"Found row for player: {name_cell}")
+                    print(f"Found player row: {name_cell}")
+                    stats['battletag'] = name_cell
                     stats['rank'] = cells[0].text.strip() if len(cells) > 0 else 'N/A'
                     stats['level'] = cells[2].text.strip() if len(cells) > 2 else 'N/A'
                     stats['class'] = cells[3].text.strip() if len(cells) > 3 else 'N/A'
                     stats['exp'] = cells[4].text.strip() if len(cells) > 4 else 'N/A'
                     stats['last_active'] = cells[5].text.strip() if len(cells) > 5 else 'N/A'
-                    stats['battletag'] = name_cell
                     break
+
+        if stats['rank'] == 'N/A':
+            print("Player not found in top ladder rows")
 
         return stats
     except Exception as e:
@@ -80,11 +83,9 @@ def flex_sig():
             draw.text((px+1, py+1), text, font=fnt, fill=(0, 0, 0))
             draw.text((px, py), text, font=fnt, fill=color)
 
-        # Title
         draw_with_shadow("LADDER FLEX", x, y, font, (200, 40, 0))
         y += 30
 
-        # Stats
         draw_with_shadow(f"Rank: {stats['rank']}", x, y, font, (255, 255, 255))
         y += line_spacing
         draw_with_shadow(f"Level: {stats['level']} {stats['class']}", x, y, font, (255, 255, 255))
