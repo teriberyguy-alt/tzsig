@@ -9,7 +9,7 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def scrape_ladder_stats():
-    url = 'https://d2emu.com/ladder/218121324'  # Your profile
+    url = 'https://d2emu.com/ladder/218121324'  # Your character profile
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
     }
@@ -27,17 +27,17 @@ def scrape_ladder_stats():
             'battletag': 'N/A'
         }
 
-        # Extract all text
         text = soup.get_text(separator=' ', strip=True)
 
-        # Rank (usually first in table or text)
+        # Rank
         if "Rank" in text:
             rank_pos = text.find("Rank")
             rank_snippet = text[rank_pos:rank_pos + 50]
-            rank = rank_snippet.split()[1] if len(rank_snippet.split()) > 1 else 'N/A'
-            stats['rank'] = rank
+            parts = rank_snippet.split()
+            if len(parts) > 1:
+                stats['rank'] = parts[1]
 
-        # Level and Class (often "Level 99 Assassin")
+        # Level and Class
         if "Level" in text:
             level_pos = text.find("Level")
             level_snippet = text[level_pos:level_pos + 50]
@@ -47,12 +47,12 @@ def scrape_ladder_stats():
             if len(parts) > 2:
                 stats['class'] = parts[2]
 
-        # Exp
+        # Experience
         if "Experience" in text:
             exp_pos = text.find("Experience")
             exp_snippet = text[exp_pos:exp_pos + 50]
             exp = exp_snippet.split()[1] if len(exp_snippet.split()) > 1 else 'N/A'
-            stats['exp'] = exp
+            stats['exp'] = exp.replace(',', '')  # Clean commas
 
         # Last Active
         if "Last Active" in text:
@@ -61,7 +61,7 @@ def scrape_ladder_stats():
             active = active_snippet.split(":", 1)[1].strip() if ":" in active_snippet else 'N/A'
             stats['last_active'] = active
 
-        # BattleTag (hardcoded fallback or scrape from title/text)
+        # BattleTag (fallback if not scraped)
         if "GuyT#11983" in text or "Its_Guy" in text:
             stats['battletag'] = "GuyT#11983"
 
@@ -78,19 +78,14 @@ def flex_sig():
         bg_path = os.path.join(BASE_DIR, 'bg.jpg')
         font_path = os.path.join(BASE_DIR, 'font.ttf')
 
-        # Fallback if files missing
-        if not os.path.exists(bg_path):
-            bg_image = Image.new('RGBA', (300, 140), (20, 20, 20))
-        else:
-            bg_image = Image.open(bg_path).convert('RGBA')
-
+        bg_image = Image.open(bg_path).convert('RGBA')
         draw = ImageDraw.Draw(bg_image)
 
         font = ImageFont.load_default()
         try:
             font = ImageFont.truetype(font_path, 12)
         except:
-            pass  # fallback to default
+            pass  # fallback to default font
 
         x = 10
         y = 10
@@ -114,9 +109,6 @@ def flex_sig():
         draw_with_shadow(f"Last Active: {stats['last_active']}", x, y, font, (255, 255, 255))
         y += line_spacing
         draw_with_shadow(f"{stats['battletag']}", x, y, font, (255, 215, 0))
-
-        # Footer
-        draw_with_shadow("GUY_T", x + 200, y + 20, font, (150, 150, 150))
 
         img_bytes = io.BytesIO()
         bg_image.save(img_bytes, format='PNG')
