@@ -11,12 +11,11 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def scrape_ladder_stats():
     url = 'https://d2emu.com/ladder/218121324'
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
     }
     try:
         response = requests.get(url, headers=headers, timeout=15)
+        print(f"Status code: {response.status_code}")  # Debug to Render logs
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -26,66 +25,40 @@ def scrape_ladder_stats():
             'class': 'N/A',
             'exp': 'N/A',
             'last_active': 'N/A',
-            'battletag': 'GuyT#11983'
+            'battletag': 'N/A'
         }
 
-        text = soup.get_text(separator=' ', strip=True)
-
-        # Extract BattleTag / Name from h1 or title
+        # h1 = name and battletag
         h1 = soup.find('h1')
         if h1:
             h1_text = h1.text.strip()
+            print(f"h1 text: {h1_text}")
             if '(' in h1_text and ')' in h1_text:
                 name = h1_text.split(' (')[0].strip()
                 battletag = h1_text.split(' (')[1].replace(')', '').strip()
                 stats['battletag'] = battletag
             else:
-                stats['battletag'] = h1_text.strip()
+                stats['battletag'] = h1_text
 
-        # Level and Mode/Class from h2 or text
+        # h2 = mode and level (e.g. "Softcore - Level 94")
         h2 = soup.find('h2')
         if h2:
             h2_text = h2.text.strip()
+            print(f"h2 text: {h2_text}")
             if '-' in h2_text:
                 mode = h2_text.split(' - ')[0].strip()
                 level = h2_text.split(' - ')[1].strip().replace('Level', '').strip()
                 stats['level'] = level
-                stats['class'] = mode  # e.g. 'Softcore' as class/mode
+                stats['class'] = mode  # Softcore/Hardcore as "class" placeholder
 
-        # Class from page text if available
-        if "Assassin" in text:
+        # Class (if explicitly listed)
+        if "Assassin" in h2_text or "Assassin" in soup.get_text():
             stats['class'] = 'Assassin'
-        elif "Sorceress" in text:
-            stats['class'] = 'Sorceress'
-        # ... add other classes if needed
 
-        # Rank - look for number near "Rank" or first #number
-        if "Rank" in text:
-            pos = text.find("Rank")
-            snippet = text[pos - 20:pos + 80]
-            parts = snippet.split()
-            for p in parts:
-                if p.isdigit() or p.startswith('#'):
-                    stats['rank'] = p
-                    break
+        # If rank/exp/last active appear later, add here
+        # For now, they are not on the page
 
-        # Exp - look for large number
-        if "Experience" in text:
-            pos = text.find("Experience")
-            snippet = text[pos - 20:pos + 100]
-            parts = snippet.split()
-            for p in parts:
-                if p.replace(',', '').isdigit() and len(p) > 6:
-                    stats['exp'] = p
-                    break
-
-        # Last Active - look for date/time
-        if "Last Active" in text:
-            pos = text.find("Last Active")
-            snippet = text[pos - 20:pos + 100]
-            active = snippet.split(":", 1)[1].strip() if ":" in snippet else 'N/A'
-            stats['last_active'] = active
-
+        print(f"Final scraped stats: {stats}")
         return stats
     except Exception as e:
         print(f"Scrape error: {str(e)}")
@@ -116,9 +89,11 @@ def flex_sig():
             draw.text((px+1, py+1), text, font=fnt, fill=(0, 0, 0))
             draw.text((px, py), text, font=fnt, fill=color)
 
+        # Title
         draw_with_shadow("LADDER FLEX", x, y, font, (200, 40, 0))
         y += 30
 
+        # Stats
         draw_with_shadow(f"Rank: {stats['rank']}", x, y, font, (255, 255, 255))
         y += line_spacing
         draw_with_shadow(f"Level: {stats['level']} {stats['class']}", x, y, font, (255, 255, 255))
