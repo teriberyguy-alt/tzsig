@@ -9,7 +9,7 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def scrape_ladder_stats():
-    url = 'https://hellforge.gg/ladders'  # Reliable ladder source
+    url = 'https://hellforge.gg/ladders'  # Fast, reliable ladder source
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -30,14 +30,14 @@ def scrape_ladder_stats():
             'battletag': 'GuyT#11341'
         }
 
-        # Find ladder table or divs
+        # Find ladder rows
         rows = soup.find_all('tr')
         for row in rows:
             cells = row.find_all('td')
             if len(cells) >= 5:
                 name_cell = cells[1].text.strip() if len(cells) > 1 else ''
                 if "GuyT#11341" in name_cell or "Its_Guy" in name_cell:
-                    print(f"Found player: {name_cell}")
+                    print(f"Found player row: {name_cell}")
                     stats['rank'] = cells[0].text.strip() if len(cells) > 0 else 'N/A'
                     stats['level'] = cells[2].text.strip() if len(cells) > 2 else 'N/A'
                     stats['class'] = cells[3].text.strip() if len(cells) > 3 else 'N/A'
@@ -46,9 +46,6 @@ def scrape_ladder_stats():
                     if len(cells) > 5:
                         stats['last_active'] = cells[5].text.strip()
                     break
-
-        if stats['rank'] == 'Not Ranked':
-            print("Player not found in top ranks")
 
         return stats
     except Exception as e:
