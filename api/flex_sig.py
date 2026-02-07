@@ -9,9 +9,12 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def scrape_ladder_stats():
-    url = 'https://d2emu.com/ladder'  # Main ladder page
+    url = 'https://d2emu.com/ladder/218121324'  # Your current profile
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'keep-alive'
     }
     try:
         response = requests.get(url, headers=headers, timeout=15)
@@ -25,34 +28,70 @@ def scrape_ladder_stats():
             'class': 'N/A',
             'exp': 'N/A',
             'last_active': 'N/A',
-            'battletag': 'GuyT#11341'
+            'battletag': 'GuyT#11341'  # Fallback
         }
 
-        # Find the table
-        table = soup.find('table')
-        if not table:
-            print("No table found on ladder page")
-            return stats
+        text = soup.get_text(separator=' ', strip=True)
+        print(f"Page text length: {len(text)}")  # Debug
 
-        rows = table.find_all('tr')
-        for row in rows:
-            cells = row.find_all('td')
-            if len(cells) >= 6:
-                # Check name/battletag cell (usually cell 1 or 2)
-                name_cell = cells[1].text.strip() if len(cells) > 1 else ''
-                if "GuyT#11341" in name_cell or "Its_Guy" in name_cell:
-                    print(f"Found player row: {name_cell}")
-                    stats['battletag'] = name_cell
-                    stats['rank'] = cells[0].text.strip() if len(cells) > 0 else 'N/A'
-                    stats['level'] = cells[2].text.strip() if len(cells) > 2 else 'N/A'
-                    stats['class'] = cells[3].text.strip() if len(cells) > 3 else 'N/A'
-                    stats['exp'] = cells[4].text.strip() if len(cells) > 4 else 'N/A'
-                    stats['last_active'] = cells[5].text.strip() if len(cells) > 5 else 'N/A'
+        # h1: name and battletag
+        h1 = soup.find('h1')
+        if h1:
+            h1_text = h1.text.strip()
+            print(f"h1: {h1_text}")
+            if '(' in h1_text and ')' in h1_text:
+                name = h1_text.split(' (')[0].strip()
+                battletag = h1_text.split(' (')[1].replace(')', '').strip()
+                stats['battletag'] = battletag
+            else:
+                stats['battletag'] = h1_text
+
+        # h2: level and mode/class
+        h2 = soup.find('h2')
+        if h2:
+            h2_text = h2.text.strip()
+            print(f"h2: {h2_text}")
+            if '-' in h2_text:
+                mode = h2_text.split(' - ')[0].strip()
+                level = h2_text.split(' - ')[1].strip().replace('Level', '').strip()
+                stats['level'] = level
+                stats['class'] = mode
+
+        # Class if explicitly mentioned
+        if "Assassin" in text:
+            stats['class'] = 'Assassin'
+
+        # Rank - look for number near "Rank" or first #number
+        if "Rank" in text:
+            pos = text.find("Rank")
+            snippet = text[pos - 20:pos + 80]
+            print(f"Rank snippet: {snippet}")
+            parts = snippet.split()
+            for p in parts:
+                if p.isdigit() or p.startswith('#'):
+                    stats['rank'] = p
                     break
 
-        if stats['rank'] == 'N/A':
-            print("Player GuyT#11341 not found in top ladder rows")
+        # Exp - look for large number near "Experience" or "Exp"
+        if "Experience" in text:
+            pos = text.find("Experience")
+            snippet = text[pos - 20:pos + 100]
+            print(f"Exp snippet: {snippet}")
+            parts = snippet.split()
+            for p in parts:
+                if p.replace(',', '').isdigit() and len(p) > 6:
+                    stats['exp'] = p
+                    break
 
+        # Last Active - look for date/time patterns
+        if "Last Active" in text:
+            pos = text.find("Last Active")
+            snippet = text[pos - 20:pos + 100]
+            print(f"Last Active snippet: {snippet}")
+            active = snippet.split(":", 1)[1].strip() if ":" in snippet else 'N/A'
+            stats['last_active'] = active
+
+        print(f"Final stats: {stats}")
         return stats
     except Exception as e:
         print(f"Scrape error: {str(e)}")
