@@ -1,28 +1,35 @@
 import io
 import os
-import requests
+import time
+from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, Response
-from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def scrape_ladder_stats():
     url = 'https://d2emu.com/ladder/218121324'
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate'
-    }
 
     try:
-        response = requests.get(url, headers=headers, timeout=20)
-        print(f"Status code: {response.status_code}")  # Log to Render
-        response.raise_for_status()
+        print("Starting Selenium scrape...")
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
 
-        soup = BeautifulSoup(response.text, 'html.parser')
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+        driver.get(url)
+        time.sleep(8)  # Wait for JS to load stats
+
+        html = driver.page_source
+        print(f"Page loaded - HTML length: {len(html)}")
 
         stats = {
             'rank': 'N/A',
@@ -33,50 +40,46 @@ def scrape_ladder_stats():
             'battletag': 'GuyT#11983'
         }
 
-        # Extract all text
-        text = soup.get_text(separator=' ', strip=True)
+        # Find elements by class or text (d2emu uses divs with classes like "ladder-stat")
+        rank_elem = driver.find_element(By.XPATH, "//*[contains(text(), 'Rank')]")
+        if rank_elem:
+            rank_text = rank_elem.text.strip()
+            print(f"Rank text found: {rank_text}")
+            if "Rank" in rank_text:
+                rank = rank_text.split("Rank")[-1].strip().split()[0]
+                if rank.isdigit() or rank.startswith('#'):
+                    stats['rank'] = rank
 
-        # Rank - look for number near "Rank" or first #number
-        rank_pos = text.find("Rank")
-        if rank_pos != -1:
-            snippet = text[rank_pos - 20:rank_pos + 80]
-            parts = snippet.split()
-            for p in parts:
-                if p.isdigit() or p.startswith('#'):
-                    stats['rank'] = p
-                    break
-
-        # Level and Class - look for "Level" followed by number and class
-        level_pos = text.find("Level")
-        if level_pos != -1:
-            snippet = text[level_pos - 20:level_pos + 100]
-            parts = snippet.split()
+        # Level/Class - look for "Level" or "Assassin"
+        level_elem = driver.find_element(By.XPATH, "//*[contains(text(), 'Level')]")
+        if level_elem:
+            level_text = level_elem.text.strip()
+            print(f"Level text found: {level_text}")
+            parts = level_text.split()
             if len(parts) > 1 and parts[1].isdigit():
                 stats['level'] = parts[1]
-            for p in parts:
-                if p in ['Assassin', 'Sorceress', 'Barbarian', 'Paladin', 'Necromancer', 'Amazon', 'Druid']:
-                    stats['class'] = p
-                    break
+            if 'Assassin' in level_text or 'Sorceress' in level_text or 'Barbarian' in level_text or 'Paladin' in level_text or 'Necromancer' in level_text or 'Amazon' in level_text or 'Druid' in level_text:
+                stats['class'] = level_text.split()[-1]
 
-        # Experience - look for large number near "Experience" or "Exp"
-        exp_pos = text.find("Experience")
-        if exp_pos != -1:
-            snippet = text[exp_pos - 20:exp_pos + 100]
-            parts = snippet.split()
-            for p in parts:
-                if p.replace(',', '').isdigit() and len(p) > 6:  # long number = exp
-                    stats['exp'] = p
-                    break
+        # Exp
+        exp_elem = driver.find_element(By.XPATH, "//*[contains(text(), 'Experience')]")
+        if exp_elem:
+            exp_text = exp_elem.text.strip()
+            print(f"Exp text found: {exp_text}")
+            exp = exp_text.split()[-1].replace(',', '')
+            if exp.isdigit():
+                stats['exp'] = exp
 
-        # Last Active - look for date/time patterns near "Active"
-        active_pos = text.find("Active")
-        if active_pos != -1:
-            snippet = text[active_pos - 20:active_pos + 100]
-            # Simple date match (e.g. "Jan 15, 2026" or "2 hours ago")
-            if any(char.isdigit() for char in snippet):
-                stats['last_active'] = snippet.split("ago")[0].strip() if "ago" in snippet else snippet.strip()
+        # Last Active
+        active_elem = driver.find_element(By.XPATH, "//*[contains(text(), 'Last Active')]")
+        if active_elem:
+            active_text = active_elem.text.strip()
+            print(f"Last Active text found: {active_text}")
+            active = active_text.split(":", 1)[1].strip() if ":" in active_text else active_text
+            stats['last_active'] = active
 
-        print(f"Scraped stats: {stats}")  # Log to Render for debug
+        driver.quit()
+        print(f"Final stats: {stats}")
         return stats
     except Exception as e:
         print(f"Scrape error: {str(e)}")
@@ -107,11 +110,9 @@ def flex_sig():
             draw.text((px+1, py+1), text, font=fnt, fill=(0, 0, 0))
             draw.text((px, py), text, font=fnt, fill=color)
 
-        # Title
         draw_with_shadow("LADDER FLEX", x, y, font, (200, 40, 0))
         y += 30
 
-        # Stats
         draw_with_shadow(f"Rank: {stats['rank']}", x, y, font, (255, 255, 255))
         y += line_spacing
         draw_with_shadow(f"Level: {stats['level']} {stats['class']}", x, y, font, (255, 255, 255))
