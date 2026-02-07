@@ -4,17 +4,25 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, Response
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def scrape_ladder_stats():
-    url = 'https://hellforge.gg/ladders'  # Hellforge ladder page
+    url = 'https://maxroll.gg/d2r/ladders'  # Faster source
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
     }
+
+    # Add retries to avoid pool errors
+    session = requests.Session()
+    retries = Retry(total=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
+    session.mount('https://', HTTPAdapter(max_retries=retries))
+
     try:
-        response = requests.get(url, headers=headers, timeout=15)
+        response = session.get(url, headers=headers, timeout=20)
         print(f"Status code: {response.status_code}")
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -28,12 +36,16 @@ def scrape_ladder_stats():
             'battletag': 'GuyT#11341'
         }
 
-        # Find table rows
-        rows = soup.find_all('tr')
+        # Find the ladder table
+        table = soup.find('table')
+        if not table:
+            print("No ladder table found")
+            return stats
+
+        rows = table.find_all('tr')
         for row in rows:
             cells = row.find_all('td')
-            if len(cells) >= 6:
-                # Check for Battletag or name in cell
+            if len(cells) >= 5:
                 name_cell = cells[1].text.strip() if len(cells) > 1 else ''
                 if "GuyT#11341" in name_cell or "Its_Guy" in name_cell:
                     print(f"Found player row: {name_cell}")
@@ -41,14 +53,16 @@ def scrape_ladder_stats():
                     stats['level'] = cells[2].text.strip() if len(cells) > 2 else 'N/A'
                     stats['class'] = cells[3].text.strip() if len(cells) > 3 else 'N/A'
                     stats['exp'] = cells[4].text.strip() if len(cells) > 4 else 'N/A'
-                    stats['last_active'] = cells[5].text.strip() if len(cells) > 5 else 'N/A'
                     stats['battletag'] = name_cell
+                    # Last active might be in another cell or not present
+                    if len(cells) > 5:
+                        stats['last_active'] = cells[5].text.strip()
                     break
 
         return stats
     except Exception as e:
         print(f"Scrape error: {str(e)}")
-        return {'rank': 'Error', 'level': 'Error', 'class': 'Error', 'exp': 'Error', 'last_active': str(e)[:30], 'battletag': 'Error'}
+        return {'rank': 'Error', 'level': 'Error', 'class': 'Error', 'exp': 'Error', 'last_active': str(e)[:30], 'battletag': 'GuyT#11341'}
 
 @app.route('/flex-sig.png')
 def flex_sig():
