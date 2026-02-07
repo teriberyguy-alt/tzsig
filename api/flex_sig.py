@@ -11,10 +11,14 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def scrape_ladder_stats():
     url = 'https://d2emu.com/ladder/218121324'  # Your character profile
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5'
     }
+
     try:
         response = requests.get(url, headers=headers, timeout=15)
+        print(f"Status code: {response.status_code}")  # Log for Render
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -24,50 +28,59 @@ def scrape_ladder_stats():
             'class': 'N/A',
             'exp': 'N/A',
             'last_active': 'N/A',
-            'battletag': 'N/A'
+            'battletag': 'GuyT#11983'  # Hardcoded fallback
         }
 
+        # Get all text
         text = soup.get_text(separator=' ', strip=True)
 
-        # Rank
+        # Rank - look for "Rank" followed by number
         if "Rank" in text:
             rank_pos = text.find("Rank")
             rank_snippet = text[rank_pos:rank_pos + 50]
             parts = rank_snippet.split()
-            if len(parts) > 1:
+            if len(parts) > 1 and parts[1].isdigit():
                 stats['rank'] = parts[1]
+            else:
+                # Try to find # followed by number
+                hash_pos = text.find('#')
+                if hash_pos != -1:
+                    rank_snippet = text[hash_pos-10:hash_pos+20]
+                    parts = rank_snippet.split()
+                    for p in parts:
+                        if p.isdigit():
+                            stats['rank'] = p
+                            break
 
-        # Level and Class
+        # Level and Class - look for "Level" followed by number and class
         if "Level" in text:
             level_pos = text.find("Level")
-            level_snippet = text[level_pos:level_pos + 50]
+            level_snippet = text[level_pos:level_pos + 80]
             parts = level_snippet.split()
-            if len(parts) > 1:
+            if len(parts) > 1 and parts[1].isdigit():
                 stats['level'] = parts[1]
-            if len(parts) > 2:
+            if len(parts) > 2 and parts[2] in ['Assassin', 'Sorceress', 'Barbarian', 'Paladin', 'Necromancer', 'Amazon', 'Druid']:
                 stats['class'] = parts[2]
 
-        # Experience
+        # Exp
         if "Experience" in text:
             exp_pos = text.find("Experience")
-            exp_snippet = text[exp_pos:exp_pos + 50]
-            exp = exp_snippet.split()[1] if len(exp_snippet.split()) > 1 else 'N/A'
-            stats['exp'] = exp.replace(',', '')  # Clean commas
+            exp_snippet = text[exp_pos:exp_pos + 80]
+            parts = exp_snippet.split()
+            if len(parts) > 1:
+                stats['exp'] = parts[1].replace(',', '')
 
         # Last Active
         if "Last Active" in text:
             active_pos = text.find("Last Active")
-            active_snippet = text[active_pos:active_pos + 50]
+            active_snippet = text[active_pos:active_pos + 80]
             active = active_snippet.split(":", 1)[1].strip() if ":" in active_snippet else 'N/A'
             stats['last_active'] = active
 
-        # BattleTag (fallback if not scraped)
-        if "GuyT#11983" in text or "Its_Guy" in text:
-            stats['battletag'] = "GuyT#11983"
-
+        print(f"Scraped stats: {stats}")  # Log to Render for debug
         return stats
     except Exception as e:
-        print(f"Scrape error: {str(e)}")
+        print(f"Scrape error: {str(e)}")  # Log to Render
         return {'rank': 'Error', 'level': 'Error', 'class': 'Error', 'exp': 'Error', 'last_active': str(e)[:30], 'battletag': 'Error'}
 
 @app.route('/flex-sig.png')
@@ -78,14 +91,20 @@ def flex_sig():
         bg_path = os.path.join(BASE_DIR, 'bg.jpg')
         font_path = os.path.join(BASE_DIR, 'font.ttf')
 
-        bg_image = Image.open(bg_path).convert('RGBA')
+        # Fallback if files missing
+        if not os.path.exists(bg_path):
+            bg_image = Image.new('RGBA', (300, 140), (20, 20, 20))
+            print("Warning: bg.jpg not found - using plain background")
+        else:
+            bg_image = Image.open(bg_path).convert('RGBA')
+
         draw = ImageDraw.Draw(bg_image)
 
         font = ImageFont.load_default()
         try:
             font = ImageFont.truetype(font_path, 12)
-        except:
-            pass  # fallback to default font
+        except Exception as e:
+            print(f"Font load error: {str(e)} - using default")
 
         x = 10
         y = 10
@@ -109,6 +128,8 @@ def flex_sig():
         draw_with_shadow(f"Last Active: {stats['last_active']}", x, y, font, (255, 255, 255))
         y += line_spacing
         draw_with_shadow(f"{stats['battletag']}", x, y, font, (255, 215, 0))
+
+        # No "GUY_T" text - it's in bg.jpg
 
         img_bytes = io.BytesIO()
         bg_image.save(img_bytes, format='PNG')
