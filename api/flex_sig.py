@@ -9,7 +9,7 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def scrape_ladder_stats():
-    url = 'https://hellforge.gg/ladders'  # Main ladder page
+    url = 'https://hellforge.gg/ladders'  # Hellforge ladder page
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
     }
@@ -28,17 +28,12 @@ def scrape_ladder_stats():
             'battletag': 'GuyT#11341'
         }
 
-        # Find the ladder table (hellforge uses divs or table)
-        table = soup.find('table') or soup.find('div', class_='ladder-table')  # adjust class if needed
-        if not table:
-            print("No ladder table found")
-            return stats
-
-        rows = table.find_all('tr')
+        # Find table rows
+        rows = soup.find_all('tr')
         for row in rows:
-            cells = row.find_all(['td', 'th'])
-            if len(cells) >= 5:
-                # Look for BattleTag or name in cell 1 or 2
+            cells = row.find_all('td')
+            if len(cells) >= 6:
+                # Check for Battletag or name in cell
                 name_cell = cells[1].text.strip() if len(cells) > 1 else ''
                 if "GuyT#11341" in name_cell or "Its_Guy" in name_cell:
                     print(f"Found player row: {name_cell}")
@@ -46,14 +41,9 @@ def scrape_ladder_stats():
                     stats['level'] = cells[2].text.strip() if len(cells) > 2 else 'N/A'
                     stats['class'] = cells[3].text.strip() if len(cells) > 3 else 'N/A'
                     stats['exp'] = cells[4].text.strip() if len(cells) > 4 else 'N/A'
+                    stats['last_active'] = cells[5].text.strip() if len(cells) > 5 else 'N/A'
                     stats['battletag'] = name_cell
-                    # Last active might be in another cell
-                    if len(cells) > 5:
-                        stats['last_active'] = cells[5].text.strip()
                     break
-
-        if stats['rank'] == 'Not Ranked':
-            print("Player GuyT#11341 not found in top ladder rows")
 
         return stats
     except Exception as e:
