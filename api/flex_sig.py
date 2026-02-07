@@ -9,7 +9,7 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def scrape_ladder_stats():
-    url = 'https://d2emu.com/ladder/218121324'
+    url = 'https://d2emu.com/ladder/218121324'  # Your profile
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
     }
@@ -24,47 +24,30 @@ def scrape_ladder_stats():
             'class': 'N/A',
             'exp': 'N/A',
             'last_active': 'N/A',
-            'battletag': 'N/A'
+            'battletag': 'GuyT#11983'
         }
 
-        text = soup.get_text(separator=' ', strip=True)
+        # Extract name and battletag from h1
+        h1 = soup.find('h1')
+        if h1:
+            h1_text = h1.text.strip()
+            if '(' in h1_text and ')' in h1_text:
+                name = h1_text.split(' (')[0].strip()
+                battletag = h1_text.split(' (')[1].replace(')', '').strip()
+                stats['battletag'] = battletag
 
-        # BattleTag
-        if "Guyt#11983" in text or "Its_Guy" in text:
-            stats['battletag'] = "Guyt#11983"
+        # Extract level and class from h2
+        h2 = soup.find('h2')
+        if h2:
+            h2_text = h2.text.strip()
+            if '-' in h2_text:
+                mode = h2_text.split(' - ')[0].strip()
+                level = h2_text.split(' - ')[1].strip().replace('Level', '').strip()
+                stats['level'] = level
+                stats['class'] = mode  # e.g. 'Softcore'
 
-        # Level and Mode/Class
-        if "Level" in text or "Softcore" in text:
-            level_pos = text.find("Level") if "Level" in text else text.find("Softcore")
-            snippet = text[level_pos:level_pos + 50]
-            parts = snippet.split()
-            if len(parts) > 1 and parts[1].isdigit():
-                stats['level'] = parts[1]
-            if len(parts) > 2:
-                stats['class'] = parts[2]  # e.g. "Assassin"
-
-        # Rank - if available
-        if "Rank" in text:
-            rank_pos = text.find("Rank")
-            snippet = text[rank_pos:rank_pos + 50]
-            parts = snippet.split()
-            if len(parts) > 1 and parts[1].isdigit():
-                stats['rank'] = parts[1]
-
-        # Exp - if available
-        if "Experience" in text:
-            exp_pos = text.find("Experience")
-            snippet = text[exp_pos:exp_pos + 50]
-            parts = snippet.split()
-            if len(parts) > 1 and parts[1].replace(',', '').isdigit():
-                stats['exp'] = parts[1]
-
-        # Last Active - if available
-        if "Last Active" in text:
-            active_pos = text.find("Last Active")
-            snippet = text[active_pos:active_pos + 50]
-            active = snippet.split(":", 1)[1].strip() if ":" in snippet else 'N/A'
-            stats['last_active'] = active
+        # Other stats if available (exp, last active)
+        # Currently not on page, so N/A
 
         return stats
     except Exception as e:
