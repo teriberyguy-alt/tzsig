@@ -1,54 +1,62 @@
 import io
 import os
-import requests
+import time
+from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, Response
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def scrape_ladder_stats():
     url = 'https://d2emu.com/ladder/218121324'
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5'
-    }
+
     try:
-        response = requests.get(url, headers=headers, timeout=15)
-        print(f"Status: {response.status_code}")  # Log to Render
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+        # Headless Chrome setup for Render
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
+
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+        driver.get(url)
+        time.sleep(5)  # Wait for JS to load stats
+
+        html = driver.page_source
+        soup = BeautifulSoup(html, 'html.parser')
 
         stats = {
-            'rank': 'Not Found',
-            'level': 'Not Found',
-            'class': 'Not Found',
-            'exp': 'Not Found',
-            'last_active': 'Not Found',
+            'rank': 'N/A',
+            'level': 'N/A',
+            'class': 'N/A',
+            'exp': 'N/A',
+            'last_active': 'N/A',
             'battletag': 'GuyT#11983'
         }
 
+        # Extract from rendered page
         text = soup.get_text(separator=' ', strip=True)
-        print(f"Page text length: {len(text)}")  # Debug: should be >1000 if loaded
 
-        # Rank - look for "Rank" or "#"
+        # Rank
         if "Rank" in text:
             pos = text.find("Rank")
             snippet = text[pos:pos + 60]
-            print(f"Rank snippet: {snippet}")
             parts = snippet.split()
-            for p in parts:
-                if p.isdigit() or p.startswith('#'):
-                    stats['rank'] = p
-                    break
+            if len(parts) > 1 and parts[1].isdigit():
+                stats['rank'] = parts[1]
 
         # Level and Class
         if "Level" in text:
             pos = text.find("Level")
             snippet = text[pos:pos + 80]
-            print(f"Level snippet: {snippet}")
             parts = snippet.split()
             if len(parts) > 1 and parts[1].isdigit():
                 stats['level'] = parts[1]
@@ -61,7 +69,6 @@ def scrape_ladder_stats():
         if "Experience" in text:
             pos = text.find("Experience")
             snippet = text[pos:pos + 80]
-            print(f"Exp snippet: {snippet}")
             parts = snippet.split()
             if len(parts) > 1:
                 exp = parts[1].replace(',', '')
@@ -72,11 +79,10 @@ def scrape_ladder_stats():
         if "Last Active" in text:
             pos = text.find("Last Active")
             snippet = text[pos:pos + 80]
-            print(f"Last Active snippet: {snippet}")
-            active = snippet.split(":", 1)[1].strip() if ":" in snippet else 'Not Found'
+            active = snippet.split(":", 1)[1].strip() if ":" in snippet else 'N/A'
             stats['last_active'] = active
 
-        print(f"Final stats: {stats}")  # Log to Render
+        driver.quit()
         return stats
     except Exception as e:
         print(f"Scrape error: {str(e)}")
